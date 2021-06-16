@@ -1,13 +1,6 @@
 from astropy.io import fits
 from astropy.io.fits.hdu.compressed import CompImageHDU
-from astropy.time import Time
 import astroquery
-from astroquery.astrometry_net import AstrometryNet
-from astropy.table import QTable
-from astropy import units as u
-from astropy.stats import sigma_clipped_stats
-from photutils import find_peaks, detect_threshold
-from astropy.coordinates import SkyCoord, Angle
 
 from source_tools import Star_Tools
 from header_modifications import Header_Info
@@ -16,22 +9,9 @@ from net.client import Client
 
 import threading
 import numpy as np
-import json
 import glob
 import os
-import sys
-import shutil
-import requests
-import time
 
-class HiddenPrints:
-    def __enter__(self):
-        self._original_stdout = sys.stdout
-        sys.stdout = open(os.devnull, 'w')
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        sys.stdout.close()
-        sys.stdout = self._original_stdout
 
 
 class Calibration_Correct(threading.Thread):
@@ -68,7 +48,6 @@ class Calibration_Correct(threading.Thread):
         self.ast = astrometrynet_instance
         self.log = log
 
-        self.hide_prints = HiddenPrints()
         self.error_message = '{"error": "no calibration data available for job'
         self.file = file
         self.timeout = 360
@@ -117,9 +96,12 @@ class Calibration_Correct(threading.Thread):
         '''
         Description
         -----------
+
+        Plate solves image that has been loaded into thread
+        :returns
+        self.header: Header object
+
         '''
-
-
         self.star_table = self.star.find_peaks(data=self.reduced)
         self.star_table_out = self.star.bad_pix(source_list=self.star_table, image=self.reduced)
         self.log.info(f'{self.filename}: Found {len(self.star_table_out)} stars')
@@ -153,7 +135,7 @@ class Calibration_Correct(threading.Thread):
                 else:
                     self.header[name[0]] = name[1]
         else:
-            self.log.warning('No solution could be found for {}, please check for image quality'.format(self.filename))
+            self.log.critical('No solution could be found for {}, please check for image quality'.format(self.filename))
             # Code to execute when solve fails
 
 

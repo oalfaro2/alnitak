@@ -5,10 +5,8 @@ from astropy import units as u
 from astropy.coordinates import SkyCoord, AltAz, EarthLocation, Angle, FK5
 import numpy as np
 import datetime
-import pytz
 import os
 import json
-import dateutil.parser
 
 
 

@@ -75,12 +75,13 @@ for x in range(0, max_threads): #Generates a dict the length of max_threads
     thread_num[f'Thread {x}'] = None
 logger.info(f'Initialized {max_threads} threads')
 
-
+coords_in_json = False
 #imports target coordinates if they exist as .json file
 prop_mot = (None, None)
 if os.path.exists(os.path.join(path + '/coords.json')):
     with open(os.path.join(path + '/coords.json')) as f:
         coords = json.load(f)
+        coords_in_json = True
         if coords['pm_ra']:
             prop_mot = (coords['pm_ra'], coords['pm_dec'])
 
@@ -94,8 +95,6 @@ mflat_list = calib.mflat_create(path=path, mdarks=mdark_list)
 
 
 
-'''--------SCIENCE--------'''
-x = 0
 img_savepath = path + '/reduced'
 if os.path.exists(img_savepath):
     shutil.rmtree(img_savepath)
@@ -106,13 +105,13 @@ if not os.path.exists(img_savepath):#makes the reduced directory if not already 
 #write if science reduce = None thing
 for file in glob.glob(path + '/*.fit*'):
     science = fits.open(file, ignore_missing_end=True)
-    try:
-        ra_obj = science[0].header['RA_OBJ']
-        dec_obj = science[0].header['DEC_OBJ']
-        coords = SkyCoord(ra=ra_obj, dec=dec_obj, unit=u.degree, frame='icrs')
-        radec_deg = coords
-    except:
-        pass
+    if not coords_in_json:
+        try:
+            ra_obj = science[0].header['RA_OBJ']
+            dec_obj = science[0].header['DEC_OBJ']
+            radec_deg = SkyCoord(ra=ra_obj, dec=dec_obj, unit=u.degree, frame='icrs')
+        except:
+            pass
     science.close()
     break_loop = False
     if threading == True:
@@ -144,99 +143,4 @@ for file in glob.glob(path + '/*.fit*'):
 
 
 
-'''
-    #plate solves the reduced image if specified
-    wcs_header = None
-    n = 0
-    try_again = True
-    if plate_solve:
-        print('Plate solving {}'.format(filename))
-        print("Determining background stats", flush=True)
-        mean, median, std = sigma_clipped_stats(reduced, sigma=3.0)
-        threshold = detect_threshold(reduced, nsigma=5)
-        print("Finding sources", flush=True)
-        sources = find_peaks(reduced, threshold=threshold, box_size=25, border_width=50)
-        sources.sort('peak_value')
-
-        stars, peaks, star_table = bad_pix(sources, reduced)
-        star_table_out = fwhm(star_table, reduced, name=x)
-        x+=1
-        print('{} sources found, {} were not bad pixels.\n{} pass fwhm criteria'.format(len(sources), len(stars), len(star_table_out)))
-
-        if sources and median <=8000:
-            if len(star_table_out) < 10:
-                print('Fewer than 10 sources found, performing standard reduction. Check to see if image is good')
-                continue
-            else:
-                #print('{} sources found:\n{}'.format(len(sources), sources))
-                sources.sort('peak_value')
-                sources.reverse()
-                #print(type(sources))
-                submission_id = None
-            while n <= 2 and try_again:
-                try:
-                    if not submission_id:
-                        wcs_header = ast.solve_from_source_list(star_table_out['starx'], star_table_out['stary'], submission_id=submission_id,
-                                                                center_ra=radec_deg.ra.degree, center_dec=radec_deg.dec.degree,
-                                                                image_width=4096, image_height=4096,
-                                                                solve_timeout=180, scale_units='arcsecperpix', scale_lower=0.36)
-                        print('---This is the wcs header: {}---'.format(wcs_header))
-                        if len(wcs_header) == 0:
-                            n += 1
-                            print('Solve for {} failed, trying again up to 2 times'.format(filename))
-                    else:
-                        wcs_header = ast.monitor_submission(submission_id=submission_id, timeout=500)
-                except:
-                    print('Solve timed out, retrying up to 2 times')
-                    n += 1
-
-            if wcs_header:
-                print('---{}---'.format(wcs_header))
-                # Code to execute when solve succeeds
-            else:
-                # Code to execute when solve fails
-                print('---SOLVE TIMEOUT---')
-                    #hdu = fits.PrimaryHDU(reduced, header = wcs_header)
-                    #hdu.writeto(newfile_save)
-
-        else:
-            print('Median counts greater than 10,000, assuming cloudy')
-    else:
-        hdu = fits.PrimaryHDU(reduced, header = header_out)
-        hdu.writeto(newfile_save)
-    print('{} reduction complete! Moving on to the next'.format(filename))
-
-    '''
-
-
-print('Data reduction complete')
-
-
-
-
-
-
-
-
-'''
-
-FOR MAKING MDARK/MFLATS
-
-for file in glob.glob('/Users/owenalfaro/Desktop/Astro_Images/M42/*.fit'):
-    dlist.append(fits.getdata(file))
-
-medlist = np.array(dlist)
-outfile = np.median(medlist, axis = 0)
-done = fits.PrimaryHDU(outfile)
-done.writeto('/Users/owenalfaro/Desktop/test.fits')
-'''
-'''
-
-make master flat dark
-make master science dark
-subtract flat dark from flat
-make mflat
-    MEDIAN
-    NORMALIZE
-reduced = (science - science dark)/(mflat/median()
-'''
+logger.info('Data reduction complete')

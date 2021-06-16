@@ -1,4 +1,3 @@
-import astropy
 from astropy.table import Table
 import numpy as np
 from astropy.stats import sigma_clipped_stats
