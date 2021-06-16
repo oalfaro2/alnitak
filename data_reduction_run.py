@@ -49,7 +49,7 @@ def set_logger(name):
 ast = AstrometryNet()
 cli = Client()
 
-ast.api_key = 'mxnnhvvdbxdwqrfa'
+ast.api_key = '' #insert api key from nova.astrometry.net
 directory = os.path.dirname(sys.argv[0])
 path = sys.argv[1]
 
