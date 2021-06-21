@@ -4,7 +4,6 @@ import astroquery
 
 from source_tools import Star_Tools
 from header_modifications import Header_Info
-from net.client import Client
 
 
 import threading
@@ -42,9 +41,9 @@ class Calibration_Correct(threading.Thread):
 
         '''
 
-        self.cli = Client()
         self.head = Header_Info(config_path, log=log)
         self.star = Star_Tools(log=log)
+        self.reduce = Simple_Reduce(config_path, log=log, astrometry_net=astrometrynet_instance)
         self.ast = astrometrynet_instance
         self.log = log
 
@@ -56,96 +55,24 @@ class Calibration_Correct(threading.Thread):
         self.dark_list = dark_list
         self.coords = coords
         self.proper_motion = proper_motion
-        self.finished = threading.Event()
         super(Calibration_Correct, self).__init__()
 
     def run(self):
 
-        img_savepath, self.filename = os.path.split(self.file)
-        self.img_savepath = os.path.join(img_savepath, 'reduced')
-
-        self.science = fits.open(self.file, unit=True)
-        self.log.info('Loaded in science file {}'.format(self.filename))
-        self.log.info('Exposure time: {}, Filter: {}'.format(self.science[0].header['EXPTIME'], self.science[0].header['FILTER']))
-
-        self.reduced = (self.science[0].data - self.dark_list[self.science[0].header['EXPTIME']])/(self.flat_list[self.science[0].header['FILTER']]/np.median(self.flat_list[self.science[0].header['FILTER']]))
-
-
-        self.newfile_save = os.path.join(self.img_savepath, ('reduced_' + self.filename))
-        self.header_out = self.science[0].header
-        self.header = self.head.header_calculations(file=str(self.file), coords=self.coords, proper_motion=self.proper_motion)
-
-        self.header['HISTORY'] = 'Dark corrected with mdark_{}.fits'.format(self.science[0].header['EXPTIME'])
-        self.header['HISTORY'] = 'Flat corrected with mflat_{}.fits'.format(self.science[0].header['FILTER'])
-        self.header['HISTORY'] = 'Reduced using data_reduction.py'
-
-        compressed = fits.PrimaryHDU(data=self.reduced, header=self.header, uint=True)
-        compressed.scale('uint16')
-        compressed.writeto(self.newfile_save, overwrite=True) #Saves reduced image. Can be left alone or plate solved
-
-
-        if self.platesolve == True:
-            self.header_out = self.plate_solve(coords=self.coords, header_in=self.header)
-            compressed = fits.PrimaryHDU(data=self.reduced, header=self.header_out, uint=True)
-            compressed.scale('uint16')
-            compressed.writeto(self.newfile_save, overwrite=True) #Overwrites saved image with plate solved version
+        self.reduce.science_reduce(path=self.file, dark_list=self.dark_list, flat_list=self.flat_list, coords=self.coords, proper_motion=self.proper_motion, platesolve=self.platesolve)
 
 
 
-    def plate_solve(self, coords, header_in):
-        '''
-        Description
-        -----------
-
-        Plate solves image that has been loaded into thread
-        :returns
-        self.header: Header object
-
-        '''
-        self.star_table = self.star.find_peaks(data=self.reduced)
-        self.star_table_out = self.star.bad_pix(source_list=self.star_table, image=self.reduced)
-        self.log.info(f'{self.filename}: Found {len(self.star_table_out)} stars')
-
-        try_again = True
-        submission_id = None
-
-        while try_again:
-            try:
-                if not submission_id:
-                    self.log.info(f'{self.filename}: Beginning solve')
-                    self.wcs_header = self.ast.solve_from_source_list(self.star_table_out['starx'], self.star_table_out['stary'],
-                                                                image_width=4096, image_height=4096,
-                                                                solve_timeout=self.timeout, submission_id=submission_id)
-                else:
-                    self.wcs_header = self.ast.monitor_submission(submission_id, solve_timeout=self.timeout)
-
-            except astroquery.exceptions.TimeoutError as e:
-                submission_id = e.args[1]
-            else:
-                # got a result, so terminate
-                try_again = False
-
-        if self.wcs_header:
-            self.log.info(f'{self.filename}: Solution found')
-            for name in self.wcs_header.cards:
-                if name[0] == 'SIMPLE' or name[0] == 'BITPIX':
-                    continue
-                elif name[0] == 'COMMENT' and name[1][0:5] == 'Index':
-                    continue
-                else:
-                    self.header[name[0]] = name[1]
-        else:
-            self.log.critical('No solution could be found for {}, please check for image quality'.format(self.filename))
-            # Code to execute when solve fails
-
-
-        return self.header
 
 
 class Simple_Reduce():
-    def __init__(self, config_path, log):
+    def __init__(self, config_path, log, astrometry_net):
         self.log = log
         self.head = Header_Info(config_path, log=log)
+        self.ast = astrometry_net
+        self.star = Star_Tools(log=log)
+        self.error_message = '{"error": "no calibration data available for job'
+
 
     def mflat_create(self, path, mdarks):
         flat_list = dict()
@@ -258,27 +185,100 @@ class Simple_Reduce():
 
         return mdarks # A list with the median darks based on exposure
 
-        def science_reduce(self, path, dark_list, flat_list, coords, proper_motion=(None, None)):
-            img_savepath, filename = os.path.split(path)
 
-            science = fits.open(path)
-            self.log.info('---Loaded in science file {}---'.format(filename))
-            self.log.info(science[0].header['EXPTIME'], science[0].header['FILTER'] )
-            reduced = (science[0].data - dark_list[science[0].header['EXPTIME']])/(flat_list[science[0].header['FILTER']]/np.median(flat_list[science[0].header['FILTER']]))
+    def science_reduce(self, path, dark_list, flat_list, coords, proper_motion=(None, None), platesolve=False, timeout=None):
 
-            try:
-                reduced = (science[0].data - dark_list[science[0].header['EXPTIME']])/(flat_list[science[0].header['FILTER']]/np.median(flat_list[science[0].header['FILTER']]))
-            except:
-                self.log.warning('Could not find corresponding dark, flat, or both for {}'.format(filename))
-                #return None
+        if timeout:
+            pass
+        else:
+            timeout = 180
+        img_savepath, filename = os.path.split(path)
+        self.path = path
+        img_savepath = os.path.join(img_savepath, 'reduced')
+        newfile_save = os.path.join(img_savepath, ('reduced_' + filename))
 
-            newfile_save = os.path.join(img_savepath, ('reduced_' + filename))
-            header_out = science[0].header
-            header = self.head.header_calculations(fits_in=path, coords=coords, proper_motion=prop_mot)
+        science = fits.open(path, unit=True)
+        self.log.info('Loaded in science file {}'.format(filename))
+        self.log.info(
+            'Exposure time: {}, Filter: {}'.format(science[0].header['EXPTIME'], science[0].header['FILTER']))
+
+        reduced = (science[0].data - dark_list[science[0].header['EXPTIME']]) / (
+                    flat_list[science[0].header['FILTER']] / np.median(
+                flat_list[science[0].header['FILTER']]))
+
+        header_in = science[0].header
+
+        if platesolve:
+            header_out = self.plate_solve(coords=coords, header_in=header_in,
+                                                      data_in=reduced, filename=filename, timeout=timeout)
+
+            header_out['HISTORY'] = 'Dark corrected with mdark_{}.fits'.format(science[0].header['EXPTIME'])
+            header_out['HISTORY'] = 'Flat corrected with mflat_{}.fits'.format(science[0].header['FILTER'])
+            header_out['HISTORY'] = 'Reduced using https://github.com/oalfaro2/alnitak'
+
+            compressed = fits.PrimaryHDU(data=reduced, header=header_out, uint=True)
+            compressed.scale('uint16')
+            compressed.writeto(newfile_save, overwrite=True)  # Overwrites saved image with plate solved version
+        else:
+            header = self.head.header_calculations(file=str(path), coords=coords)
 
             header['HISTORY'] = 'Dark corrected with mdark_{}.fits'.format(science[0].header['EXPTIME'])
             header['HISTORY'] = 'Flat corrected with mflat_{}.fits'.format(science[0].header['FILTER'])
-            header['HISTORY'] = 'Reduced using data_reduction.py'
+            header['HISTORY'] = 'Reduced using https://github.com/oalfaro2/alnitak'
 
-            compressed = CompImageHDU(data=reduced, header=header)
-            compressed.writeto(newfile_save)
+            compressed = fits.PrimaryHDU(data=reduced, header=header, uint=True)
+            compressed.scale('uint16')
+            compressed.writeto(newfile_save,
+                               overwrite=True)  # Saves reduced image. Can be left alone or plate solved
+
+
+    def plate_solve(self, coords, header_in, data_in, timeout, filename):
+        '''
+        Description
+        -----------
+
+        Plate solves image that has been loaded into thread
+        :returns
+        self.header: Header object
+
+        '''
+        star_table = self.star.find_peaks(data=data_in)
+        star_table_out = self.star.bad_pix(source_list=star_table, image=data_in)
+        self.log.info(f'{filename}: Found {len(star_table_out)} stars')
+
+        try_again = True
+        submission_id = None
+
+        while try_again:
+            try:
+                if not submission_id:
+                    self.log.info(f'{filename}: Beginning solve')
+                    wcs_header = self.ast.solve_from_source_list(star_table_out['starx'],
+                                                                 star_table_out['stary'],
+                                                                 image_width=4096, image_height=4096,
+                                                                 solve_timeout=timeout,
+                                                                 submission_id=submission_id)
+                else:
+                    wcs_header = self.ast.monitor_submission(submission_id, solve_timeout=timeout)
+
+            except astroquery.exceptions.TimeoutError as e:
+                submission_id = e.args[1]
+            else:
+                # got a result, so terminate
+                try_again = False
+
+        if wcs_header:
+            self.log.info(f'{filename}: Solution found')
+            for name in wcs_header.cards:
+                if name[0] == 'SIMPLE' or name[0] == 'BITPIX':
+                    continue
+                elif name[0] == 'COMMENT' and name[1][0:5] == 'Index':
+                    continue
+                else:
+                    header_in[name[0]] = name[1]
+        else:
+            self.log.critical('No solution could be found for {}, please check for image quality'.format(filename))
+            # Code to execute when solve fails
+        header_out = self.head.header_calculations(plate_solved=True, header=header_in, file=self.path)
+
+        return header_out

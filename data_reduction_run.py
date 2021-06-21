@@ -10,7 +10,6 @@ from astropy.coordinates import SkyCoord, Angle
 from source_tools import Star_Tools
 from header_modifications import Header_Info
 from reduction_utils import Calibration_Correct, Simple_Reduce
-from net.client import Client
 import threading
 import logging
 
@@ -39,7 +38,7 @@ def set_logger(name):
     screen_handler = logging.StreamHandler(stream=sys.stdout)
     screen_handler.setFormatter(formatter)
     logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.INFO)
     logger.addHandler(handler)
     logger.addHandler(screen_handler)
     logger.info('Initialized logging')
@@ -47,24 +46,23 @@ def set_logger(name):
 
 
 ast = AstrometryNet()
-cli = Client()
 
-ast.api_key = '' #insert api key from nova.astrometry.net
+ast.api_key = 'mxnnhvvdbxdwqrfa' #insert api key from nova.astrometry.net
 directory = os.path.dirname(sys.argv[0])
 path = sys.argv[1]
 
 logger = set_logger('logger')
-calib = Simple_Reduce(directory, log=logger)
+calib = Simple_Reduce(directory, log=logger, astrometry_net=ast)
 
 plate_solve = True
 threading = True
 
 
 for zz in sys.argv:
-    if zz == '-ns':
+    if zz == '-ns' or zz == '-nosolve':
         plate_solve = False
         logger.info('These science images will NOT be plate solved')
-    if zz == '-nothreading':
+    if zz == '-nt' or zz == '-nothreading':
         threading = False
         logger.info('These images will be reduced without threading. This will take longer')
 
@@ -118,14 +116,14 @@ for file in glob.glob(path + '/*.fit*'):
         while break_loop == False:
             for num in thread_num.keys():
                 if thread_num[num] == None: # Starts new thread, should only run once per thread
-                    new_thread = Calibration_Correct(config_path=directory, file=file, plate_solve=True,
+                    new_thread = Calibration_Correct(config_path=directory, file=file, plate_solve=plate_solve,
                                                     flat_list=mflat_list, dark_list=mdark_list, coords=radec_deg, astrometrynet_instance=ast, log=logger)
                     new_thread.start()
                     thread_num[num] = new_thread
                     break_loop = True
                     break
                 elif not thread_num[num].is_alive(): # Starts new thread once a previous one finishes
-                    new_thread = Calibration_Correct(config_path=directory, file=file, plate_solve=True,
+                    new_thread = Calibration_Correct(config_path=directory, file=file, plate_solve=plate_solve,
                                                     flat_list=mflat_list, dark_list=mdark_list, coords=radec_deg, astrometrynet_instance=ast, log=logger)
                     new_thread.start()
                     thread_num[num] = new_thread
@@ -139,7 +137,7 @@ for file in glob.glob(path + '/*.fit*'):
         path, filename = os.path.split(file)
 
         calib.science_reduce(path=file, flat_list=mflat_list, dark_list=mdark_list,
-                                        directory=img_savepath, coords=radec_deg, save=True, platesolve=True)
+                             coords=radec_deg, platesolve=plate_solve)
 
 
 

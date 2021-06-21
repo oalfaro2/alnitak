@@ -67,34 +67,41 @@ class Header_Info():
         self.log.info(radec_deg_adjusted_.ra.deg)
         return radec_deg_adjusted
 
+    def header_calculations(self, file=None, coords=None, proper_motion=None, header=None, plate_solved=False):
+        dir_, filename = os.path.split(file)
+        if plate_solved:
+            ra = header['CRVAL1']
+            dec = header['CRVAL2']
+            coords_solved = SkyCoord(ra=ra, dec=dec, unit=u.deg, frame='icrs')
+            header_out = self.calculations(header=header, coords=coords_solved)
+        else:
+            fits_in = fits.open(file)
+            header_out = self.calculations(header=fits_in[0].header, coords=coords)
+        self.log.info(f'{filename}: Header calculations complete')
+        return header_out
 
-    def header_calculations(self, file, coords=None, proper_motion=None):
+    def calculations(self, coords=None, proper_motion=None, header=None):
         #requires fits file with header
         #See if alt and az are accurate enough
-        path, filename = os.path.split(file)
-        fits_in = fits.open(file)
 
-
-        jd = fits_in[0].header['JD']    #Julian date at start of exposure
-        date = fits_in[0].header['DATE-OBS']
+        jd = header['JD']    #Julian date at start of exposure
+        date = header['DATE-OBS']
         date_obj = datetime.datetime.strptime(date, '%Y-%m-%dT%H:%M:%S')
         #print(date, date_obj)
-        jd_helio = fits_in[0].header['JD-HELIO']    #Heliocentric JD at start of exposure
-        mid_exp = fits_in[0].header['EXPOSURE']/2   #middle of exposure
+        jd_helio = header['JD-HELIO']    #Heliocentric JD at start of exposure
+        mid_exp = header['EXPOSURE']/2   #middle of exposure
         jd_utc_mid = Time(date_obj + datetime.timedelta(seconds=mid_exp), scale='utc').jd   #JD at mid exposure
         jd_utc_mid_frame = Time(date_obj + datetime.timedelta(seconds=mid_exp), scale='utc')   #JD at mid exposure but the Time frame
-        #print('JD UTC mid exposure: {}'.format(jd_utc_mid))
-
-        #days_since_j2000(date=date_obj + datetime.timedelta(seconds=mid_exp))
 
         bjd_tdb = utc_tdb.JDUTC_to_BJDTDB(jd_utc_mid, lat=self.config['Site_lat'], longi=self.config['Site_long'], alt=self.config['Site_alt'])
-        #Converts julian date to barycentric julian date
-        fits_in[0].header['SITELAT'] = (self.config['Site_lat'], 'Geographic latitude of observatory')
-        fits_in[0].header['SITELONG'] = (self.config['Site_long'], 'Geographic longitude of observatory')
-        fits_in[0].header['SITEALT'] = (self.config['Site_alt'], 'Altitude of observatory (m) above MSL')
-        fits_in[0].header['JD_SOBS'] = (jd, 'JD (UTC) at the start of observation')
-        fits_in[0].header['JD_UTC'] = (jd_utc_mid, 'JD (UTC) at the midpoint of the exposure')
-        fits_in[0].header['BJD_TDB'] = (float(bjd_tdb[0]), 'Barycentric JD at the midpoint of the exposure')
+
+#       Converts julian date to barycentric julian date
+        header['SITELAT'] = (self.config['Site_lat'], 'Geographic latitude of observatory')
+        header['SITELONG'] = (self.config['Site_long'], 'Geographic longitude of observatory')
+        header['SITEALT'] = (self.config['Site_alt'], 'Altitude of observatory (m) above MSL')
+        header['JD_SOBS'] = (jd, 'JD (UTC) at the start of observation')
+        header['JD_UTC'] = (jd_utc_mid, 'JD (UTC) at the midpoint of the exposure')
+        header['BJD_TDB'] = (float(bjd_tdb[0]), 'Barycentric JD at the midpoint of the exposure')
 
         #print(f'{filename} JD SObs: {jd}')
         if coords:
@@ -114,15 +121,15 @@ class Header_Info():
 
 
 
-            fits_in[0].header['ALT_OBJ'] = (altaz.alt.deg, 'Target Altitude at mid exposure')
-            fits_in[0].header['AZ_OBJ'] = (altaz.az.deg, 'Target Azimuth at mid exposure')
-            fits_in[0].header['HA_AP'] = (float(ha_mean.to_string(unit=u.hour, decimal=True)), 'Mean Hourangle at mid exposure')
-            fits_in[0].header['HA_MEAN'] = (float(ha_apparent.to_string(unit=u.hour, decimal=True)), 'Apparent Hourangle at mid exposure')
-            fits_in[0].header['ZD_OBJ'] = (zenith_dist, 'Distance from zenith at mid exposure')
-            fits_in[0].header['AIRMASS'] = (airmass, 'Target airmass at mid exposure')
-            fits_in[0].header['RA_OBJ'] = (coords.ra.hour, 'Target Right ascension (hours)')
-            fits_in[0].header['DEC_OBJ'] = (coords.dec.deg, 'Target declination (degrees)')
-            fits_in[0].header['RAOBJ2K'] = (coords_2k.ra.hour, 'Target J2000 Right ascension (hours)')
-            fits_in[0].header['DECOBJ2K'] = (coords_2k.dec.deg, 'Target J2000 declination (degrees)')
+            header['ALT_OBJ'] = (altaz.alt.deg, 'Target Altitude at mid exposure')
+            header['AZ_OBJ'] = (altaz.az.deg, 'Target Azimuth at mid exposure')
+            header['HA_AP'] = (float(ha_mean.to_string(unit=u.hour, decimal=True)), 'Mean Hourangle at mid exposure')
+            header['HA_MEAN'] = (float(ha_apparent.to_string(unit=u.hour, decimal=True)), 'Apparent Hourangle at mid exposure')
+            header['ZD_OBJ'] = (zenith_dist, 'Distance from zenith at mid exposure')
+            header['AIRMASS'] = (airmass, 'Target airmass at mid exposure')
+            header['RA_OBJ'] = (coords.ra.hour, 'Target Right ascension (hours)')
+            header['DEC_OBJ'] = (coords.dec.deg, 'Target declination (degrees)')
+            header['RAOBJ2K'] = (coords_2k.ra.hour, 'Target J2000 Right ascension (hours)')
+            header['DECOBJ2K'] = (coords_2k.dec.deg, 'Target J2000 declination (degrees)')
 
-        return fits_in[0].header
+        return header
