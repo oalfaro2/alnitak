@@ -45,6 +45,7 @@ class Header_Info():
         if ha > 12:
             ha -= 24
         # Convert to degrees
+        #test
         ha *= 15
         (dec_r, latitude_r, longitude_r, HA_r) = np.radians([dec, latitude, longitude, ha])
 
