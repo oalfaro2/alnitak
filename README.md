@@ -12,11 +12,11 @@ astroquery
 
 photutils
 
-glob
-
 numpy
 
 scipy
+
+barycorrpy
 
 The code uses the plate solver api by nova.astrometry.net, so you need your own api key in order to use. Head to http://nova.astrometry.net/ and make an account (if you dont already have one. You can find your key at https://nova.astrometry.net/api_help. You can copy and paste your key in line 50 in data_reduction_run.py
 
