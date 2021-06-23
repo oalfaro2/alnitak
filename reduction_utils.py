@@ -75,6 +75,19 @@ class Simple_Reduce():
 
 
     def mflat_create(self, path, mdarks):
+        '''
+        Description
+        -----------
+        Creates a list of master flats. Dark subtracts them if there is a dark with the same exposure time as the flat
+
+        :param path: STR
+            path to folder containing flats
+        :param mdarks: DICT
+            dictionary of mdarks with keys as exposure times
+        :return:
+            mflats: DICT
+            dictionary of master flats with keys as filters
+        '''
         flat_list = dict()
         flat_header = dict()
         mflats = dict()
@@ -132,6 +145,17 @@ class Simple_Reduce():
         return mflats
 
     def mdark_create(self, path):
+        '''
+        Description
+        -----------
+        Creates a list of master darks in a dictionary with keys as exposure times
+
+        :param path: STR
+            Path to folder containing dark .fits images
+        :return:
+            mdarks: DICT
+                List of master darks
+        '''
         exp_times = dict()
         header_times = dict()
         mdarks = dict()
@@ -186,7 +210,32 @@ class Simple_Reduce():
         return mdarks # A list with the median darks based on exposure
 
 
-    def science_reduce(self, path, dark_list, flat_list, coords, proper_motion=(None, None), platesolve=False, timeout=None):
+    def science_reduce(self, path, dark_list, flat_list, coords, platesolve=False, timeout=None, proper_motion=(None, None)):
+        '''
+        Description
+        -----------
+        Dark subtracts and flat divides inputted science .fits image with appropriate flat and dark
+        Passes image to plate solver for uploading to nova.astrometry.net
+        Saves reduced, plate solved image
+
+        :param path: STR
+            path to science .fits image
+        :param dark_list: DICT
+            Dictionary of master darks. Keys are exposure times
+        :param flat_list: DICT
+            Dictionary of master flats. Keys are Filters
+        :param coords: Astropy Coordinates Obj
+            Initial coordinates of science .fits image
+        :param platesolve: BOOL
+            If true, plate solves image using nova.astrometry.net
+        :param timeout: INT
+            Integer time in seconds for astrometry.net timeout
+        :param proper_motion: TUPLE
+            Tuple of measured proper motion of host star, can be found at
+            https://exofop.ipac.caltech.edu/tess/
+            default (None, None). Not required
+        :return:
+        '''
 
         if timeout:
             pass
@@ -245,6 +294,8 @@ class Simple_Reduce():
         star_table = self.star.find_peaks(data=data_in)
         star_table_out = self.star.bad_pix(source_list=star_table, image=data_in)
         self.log.info(f'{filename}: Found {len(star_table_out)} stars')
+        if len(star_table_out) <= 10:
+            self.log.warning(f'{filename}: Less than 10 stars found, attempting solve anyway')
 
         try_again = True
         submission_id = None

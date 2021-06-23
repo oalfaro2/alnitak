@@ -20,6 +20,7 @@ import glob
 import os
 import sys
 import shutil
+import time
 
 #Get coordinates for plate solving from http://simbad.u-strasbg.fr/simbad/
 #Use icrs frame
@@ -141,6 +142,9 @@ for file in glob.glob(path + '/*.fit*'):
         calib.science_reduce(path=file, flat_list=mflat_list, dark_list=mdark_list,
                              coords=radec_deg, platesolve=plate_solve)
 
-
+for n in thread_num.keys():
+    while thread_num[n].is_alive():
+        time.sleep(1)
+#       Waits until every thread has finished to print complete
 
 logger.info('Data reduction complete')
