@@ -24,6 +24,9 @@ import shutil
 #Get coordinates for plate solving from http://simbad.u-strasbg.fr/simbad/
 #Use icrs frame
 
+directory = os.path.dirname(sys.argv[0])
+with open(os.path.join(directory, 'config.json')) as f:
+    conf = json.load(f)
 
 def set_logger(name):
     #Creates a logger object that can be passed to threads
@@ -47,8 +50,8 @@ def set_logger(name):
 
 ast = AstrometryNet()
 
-ast.api_key = '' #insert api key from nova.astrometry.net
-directory = os.path.dirname(sys.argv[0])
+ast.api_key = conf['API_Key'] #insert api key from nova.astrometry.net
+max_threads = int(conf['Max_Threads'])
 path = sys.argv[1]
 
 logger = set_logger('logger')
@@ -67,7 +70,6 @@ for zz in sys.argv:
         logger.info('These images will be reduced without threading. This will take longer')
 
 
-max_threads = 5
 thread_num = dict()
 for x in range(0, max_threads): #Generates a dict the length of max_threads
     thread_num[f'Thread {x}'] = None

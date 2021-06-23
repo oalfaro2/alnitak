@@ -16,7 +16,10 @@ class Header_Info():
         with open(os.path.join(config_path, 'config.json')) as f:
             self.config = json.load(f)
             for x in self.config.keys():
-                self.config[x] = float(self.config[x])
+                try:
+                    self.config[x] = float(self.config[x])
+                except:
+                    continue
 
 
     def years_since_2015(self, year):
