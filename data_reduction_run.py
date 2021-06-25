@@ -21,10 +21,11 @@ import os
 import sys
 import shutil
 import time
+import datetime
 
 #Get coordinates for plate solving from http://simbad.u-strasbg.fr/simbad/
 #Use icrs frame
-
+now = datetime.datetime.now()
 directory = os.path.dirname(sys.argv[0])
 with open(os.path.join(directory, 'config.json')) as f:
     conf = json.load(f)
@@ -144,8 +145,13 @@ for file in glob.glob(path + '/*.fit*'):
                              coords=radec_deg, platesolve=plate_solve)
 
 for n in thread_num.keys():
-    while thread_num[n].is_alive():
+    try:
+        while thread_num[n].is_alive():
+            time.sleep(1)
+    except:
         time.sleep(1)
+        continue
 #       Waits until every thread has finished to print complete
-
-logger.info('Data reduction complete')
+end = datetime.datetime.now()
+total = end-now
+logger.info(f'Data reduction complete. Took {total.total_seconds()}s')
