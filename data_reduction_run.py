@@ -112,6 +112,7 @@ for file in glob.glob(path + '/*.fit*'):
             dec_obj = science[0].header['DEC_OBJ']
             radec_deg = SkyCoord(ra=ra_obj, dec=dec_obj, unit=u.degree, frame='icrs')
         except:
+            radec_deg = None
             pass
     science.close()
     break_loop = False
