@@ -10,6 +10,7 @@ import threading
 import numpy as np
 import glob
 import os
+import json
 
 
 
@@ -42,7 +43,7 @@ class Calibration_Correct(threading.Thread):
         '''
 
         self.head = Header_Info(config_path, log=log)
-        self.star = Star_Tools(log=log)
+        self.star = Star_Tools(log=log, config_path=config_path)
         self.reduce = Simple_Reduce(config_path, log=log, astrometry_net=astrometrynet_instance)
         self.ast = astrometrynet_instance
         self.log = log
@@ -70,8 +71,10 @@ class Simple_Reduce():
         self.log = log
         self.head = Header_Info(config_path, log=log)
         self.ast = astrometry_net
-        self.star = Star_Tools(log=log)
+        self.star = Star_Tools(log=log, config_path=config_path)
         self.error_message = '{"error": "no calibration data available for job'
+        with open(os.path.join(config_path, 'config.json')) as f:
+            self.config = json.load(f)
 
 
     def mflat_create(self, path, mdarks):
@@ -243,8 +246,10 @@ class Simple_Reduce():
             timeout = 180
         img_savepath, filename = os.path.split(path)
         self.path = path
-        img_savepath = os.path.join(img_savepath, 'reduced')
-        newfile_save = os.path.join(img_savepath, ('reduced_' + filename))
+        img_savepath_ = os.path.join(img_savepath, 'reduced')
+        bad_folder = os.path.join(img_savepath, 'bad')
+        newfile_save = os.path.join(img_savepath_, ('reduced_' + filename))
+        bad_newfile_save = os.path.join(bad_folder, ('reduced_' + filename))
 
         science = fits.open(path, unit=True)
         self.log.info('Loaded in science file {}'.format(filename))
@@ -258,16 +263,26 @@ class Simple_Reduce():
         header_in = science[0].header
 
         if platesolve:
-            header_out = self.plate_solve(coords=coords, header_in=header_in,
+#       Plate solving here
+            header_out, success = self.plate_solve(coords=coords, header_in=header_in,
                                                       data_in=reduced, filename=filename, timeout=timeout)
+            if success:
+#           If solve is successful, saves to newfile save
+                header_out['HISTORY'] = 'Dark corrected with mdark_{}.fits'.format(science[0].header['EXPTIME'])
+                header_out['HISTORY'] = 'Flat corrected with mflat_{}.fits'.format(science[0].header['FILTER'])
+                header_out['HISTORY'] = 'Reduced using https://github.com/oalfaro2/alnitak'
 
-            header_out['HISTORY'] = 'Dark corrected with mdark_{}.fits'.format(science[0].header['EXPTIME'])
-            header_out['HISTORY'] = 'Flat corrected with mflat_{}.fits'.format(science[0].header['FILTER'])
-            header_out['HISTORY'] = 'Reduced using https://github.com/oalfaro2/alnitak'
+                compressed = fits.PrimaryHDU(data=reduced, header=header_out, uint=True)
+                compressed.scale('uint16')
+                compressed.writeto(newfile_save, overwrite=True)  # Overwrites saved image with plate solved version
+            else:
+#           If not successful, saves to different directory. Performs what header calculations it can
+                header_out = self.head.header_calculations(plate_solved=False, header=header_in, file=self.path)
+                header_out['HISTORY'] = 'Could not be plate solved'
 
-            compressed = fits.PrimaryHDU(data=reduced, header=header_out, uint=True)
-            compressed.scale('uint16')
-            compressed.writeto(newfile_save, overwrite=True)  # Overwrites saved image with plate solved version
+                compressed = fits.PrimaryHDU(data=reduced, header=header_out, uint=True)
+                compressed.scale('uint16')
+                compressed.writeto(bad_newfile_save, overwrite=True)
         else:
             header = self.head.header_calculations(file=str(path), coords=coords)
 
@@ -292,13 +307,14 @@ class Simple_Reduce():
 
         '''
         star_table = self.star.find_peaks(data=data_in)
-        star_table_out = self.star.bad_pix(source_list=star_table, image=data_in)
-        self.log.info(f'{filename}: Found {len(star_table_out)} stars')
-        if len(star_table_out) <= 10:
+        star_table_out, med_fwhm = self.star.bad_pix(source_list=star_table, image=data_in)
+        self.log.info(f'{filename}: Found {len(star_table_out)} stars. Median FWHM: {med_fwhm} px')
+        if len(star_table_out) <= int(self.config['Min_Stars']):
             self.log.warning(f'{filename}: Less than 10 stars found, attempting solve anyway')
 
         try_again = True
         submission_id = None
+        success = True
 
         while try_again:
             try:
@@ -329,7 +345,11 @@ class Simple_Reduce():
                     header_in[name[0]] = name[1]
         else:
             self.log.critical('No solution could be found for {}, please check for image quality'.format(filename))
+            success = False
+            header_out = None
+            return header_out, success
             # Code to execute when solve fails
+
         header_out = self.head.header_calculations(plate_solved=True, header=header_in, file=self.path)
 
-        return header_out
+        return header_out, success

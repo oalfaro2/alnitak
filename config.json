@@ -3,5 +3,7 @@
   "Site_lat": "38.828195",
   "Site_alt": "154",
   "API_Key": "",
-  "Max_Threads": "5"
+  "Max_Threads": "5",
+  "Threshold": "1.2",
+  "Min_Stars": "15"
 }

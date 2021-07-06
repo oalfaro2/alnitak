@@ -98,10 +98,16 @@ mflat_list = calib.mflat_create(path=path, mdarks=mdark_list)
 
 
 img_savepath = path + '/reduced'
+bad_img_path = path + '/bad'
 if os.path.exists(img_savepath):
     shutil.rmtree(img_savepath)
 if not os.path.exists(img_savepath):#makes the reduced directory if not already exists
     os.mkdir(img_savepath)
+
+if os.path.exists(bad_img_path):
+    shutil.rmtree(bad_img_path)
+if not os.path.exists(bad_img_path):#makes the bad image directory if not already exists
+    os.mkdir(bad_img_path)
 
 
 #write if science reduce = None thing

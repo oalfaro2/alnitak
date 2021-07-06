@@ -4,6 +4,8 @@ from astropy.stats import sigma_clipped_stats
 from photutils.detection import find_peaks
 from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
+import json
+import os
 
 saturation = 30000
 def hms_to_degree(angle):
@@ -13,8 +15,10 @@ def hms_to_degree(angle):
 
 
 class Star_Tools():
-    def __init__(self, log):
+    def __init__(self, log, config_path):
         self.log = log
+        with open(os.path.join(config_path, 'config.json')) as f:
+            self.config = json.load(f)
         pass
 
 
@@ -42,7 +46,7 @@ class Star_Tools():
                 bad_pixel = True
             pixels = [(y_cent, x_cent + 1), (y_cent, x_cent - 1), (y_cent + 1, x_cent), (y_cent - 1, x_cent)]
             for value in pixels:
-                if image[value[0], value[1]] < 1.1 * median:
+                if image[value[0], value[1]] < float(self.config['Threshold']) * median:
                     bad_pixel = True
             if bad_pixel:
                 bad_pix_num += 1
@@ -53,12 +57,14 @@ class Star_Tools():
             stars.append(star)
             peaks.append(peak)
         star_table = Table([good_x, good_y], names = ('starx', 'stary'))
+        star_table_out, med_fwhm = self.fwhm(star_list=star_table, data=image)
 
         self.log.debug(f'{bad_pix_num} sources removed from list of {len(source_list)} potential stars.')
-        return star_table
+        self.log.debug(f'{len(star_table_out)} stars found. Median FWHM (pix): {med_fwhm}')
+        return star_table_out, med_fwhm
 
 
-    def fwhm(self, star_list, data, name, splitdata=False, radius=30):
+    def fwhm(self, star_list, data, splitdata=False, radius=30):
         a = 0
         fwhm_list = []
         good_stars_x = []
@@ -85,6 +91,14 @@ class Star_Tools():
                 f = np.linspace(0, len(radialprofile)-1, len(radialprofile))
                 mean = np.mean(radialprofile)
                 sigma = np.std(radialprofile)
+                for x in range(len(radialprofile)):
+                    if radialprofile[x] <= (1 / 2) * maximum:
+                        fwhm = 2 * x
+                        if fwhm >= 3 and fwhm <= 30:
+                            fwhm_list.append(fwhm)
+                            good_stars_x.append(x_cent)
+                            good_stars_y.append(y_cent)
+                            break
                 '''
                 try:
                     popt, pcov = curve_fit(gaussianfit, f, radialprofile, p0=[1 / (np.sqrt(2 * np.pi)), mean, sigma])
@@ -113,7 +127,7 @@ class Star_Tools():
                                 break
                 except RuntimeError:
                     #print("Could not find a Gaussian Fit...using whole pixel values to estimate fwhm")
-                    '''
+
                 for x in range(len(radialprofile)):
                     if radialprofile[x] <= (1/2)*maximum:
                         fwhm = 2*x
@@ -134,15 +148,18 @@ class Star_Tools():
                             good_stars_x.append(x_cent)
                             good_stars_y.append(y_cent)
                             break
-
+'''
             else:
                 #print('Radial profile has length of 0...')
                 continue
             if splitdata:
                 return fwhm_list, good_stars_x, good_stars_y
-        star_table = QTable([good_stars_x, good_stars_y], names=('starx', 'stary'))
-        print('FWHM list: {}'.format(fwhm_list))
-        return star_table
+        star_table = Table([good_stars_x, good_stars_y], names=('starx', 'stary'))
+        if len(fwhm_list) == 0:
+            med_fwhm = 0
+        else:
+            med_fwhm = np.median(fwhm_list)
+        return star_table, med_fwhm
 
     def gaussianfit(self, x, a, x0, sigma):
         return a*np.exp(-(x-x0)**2/(2*sigma**2))
