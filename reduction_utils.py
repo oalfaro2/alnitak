@@ -310,7 +310,7 @@ class Simple_Reduce():
         star_table_out, med_fwhm = self.star.bad_pix(source_list=star_table, image=data_in)
         self.log.info(f'{filename}: Found {len(star_table_out)} stars. Median FWHM: {med_fwhm} px')
         if len(star_table_out) <= int(self.config['Min_Stars']):
-            self.log.warning(f'{filename}: Less than 10 stars found, aborting solve')
+            self.log.warning(f'{filename}: Less than {self.config["Min_Stars"]} stars found, aborting solve')
             success = False
             header_out = None
             return header_out, success
