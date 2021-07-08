@@ -15,3 +15,5 @@ with open(filename, 'r') as f:
 os.remove(filename)
 with open(filename, 'w') as f:
     json.dump(config, f, indent=4)
+print(config)
+print('Done!')
