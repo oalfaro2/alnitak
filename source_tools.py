@@ -3,7 +3,7 @@ import numpy as np
 from astropy.stats import sigma_clipped_stats
 from photutils.detection import find_peaks
 from scipy.optimize import curve_fit
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 import json
 import os
 
