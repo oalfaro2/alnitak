@@ -101,7 +101,7 @@ class Simple_Reduce():
             if str(filename)[0:len('mflat')] == 'mflat':
                 continue
             flat_dark = False
-            flat_data = fits.open(file, unit=False)
+            flat_data = fits.open(file, unit=True)
             self.log.info('Loaded in flat frame {}'.format(filename))
             if flat_data[0].header['FILTER'] not in flat_list.keys(): #If the exposure time is not in the dict, creates new key
                 keyname = flat_data[0].header['FILTER']
@@ -137,7 +137,7 @@ class Simple_Reduce():
             self.log.info(f'Master Flat {filter} calculated')
 
             mflat = fits.PrimaryHDU(data=mflat_, header = flat_header[filter], scale_back=True)
-            mflat.scale('int16')
+            mflat.scale('uint16')
             mflats[filter] = mflat.data # Adds to list of Mflats
             if not os.path.exists(os.path.join(fsave, ('mflat_{}.fits'.format(filter)))):
                 mflat.writeto(os.path.join(fsave, ('mflat_{}.fits'.format(filter))))

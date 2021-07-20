@@ -160,4 +160,6 @@ for n in thread_num.keys():
 #       Waits until every thread has finished to print complete
 end = datetime.datetime.now()
 total = end-now
-logger.info(f'Data reduction complete. Took {total.total_seconds()}s')
+minutes = total.total_seconds()//60
+seconds = ((total.total_seconds()/60) - minutes)*60
+logger.info(f'Data reduction complete. Took {minutes}m:{seconds}s')

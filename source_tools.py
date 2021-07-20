@@ -99,56 +99,7 @@ class Star_Tools():
                             good_stars_x.append(x_cent)
                             good_stars_y.append(y_cent)
                             break
-                '''
-                try:
-                    popt, pcov = curve_fit(gaussianfit, f, radialprofile, p0=[1 / (np.sqrt(2 * np.pi)), mean, sigma])
-                    g = np.linspace(0, len(radialprofile)-1, 10*len(radialprofile))
-                    function = gaussianfit(g, *popt)
-                    for x in range(len(function)):
-                        if function[x] <= (1/2)*maximum:
-                            fwhm = 2*x
-                            if fwhm >=3 and fwhm <=30:
-                                fwhm_list.append(fwhm)
-                                good_stars_x.append(x_cent)
-                                good_stars_y.append(y_cent)
 
-                                plt.plot(f, radialprofile, 'b+:', label='data')
-                                plt.plot(f, gaussianfit(f, *popt), 'ro:', label='fit')
-                                plt.plot([0, fwhm/2], [(1/2)*maximum, (1/2)*maximum], 'g-.')
-                                plt.plot([fwhm/2, fwhm/2], [0, (1/2)*maximum], 'g-.', label='HWHM')
-                                plt.legend()
-                                plt.xlabel('x position, HWHM = {}'.format(fwhm/2))
-                                plt.ylabel('normalized counts')
-                                plt.grid()
-                                plt.savefig(r'/Users/owenalfaro/Desktop/testplots/GaussianPlot{}-{}.png'.format(name,a))
-                                plt.close()
-                                a += 1
-
-                                break
-                except RuntimeError:
-                    #print("Could not find a Gaussian Fit...using whole pixel values to estimate fwhm")
-
-                for x in range(len(radialprofile)):
-                    if radialprofile[x] <= (1/2)*maximum:
-                        fwhm = 2*x
-                        if fwhm >=3 and fwhm <=30:
-
-                            plt.plot(f, radialprofile, 'b+:', label='data')
-                            #plt.plot(f, gaussianfit(f, *popt), 'ro:', label='fit')
-                            plt.plot([0, fwhm/2], [(1/2)*maximum, (1/2)*maximum], 'g-.')
-                            plt.plot([fwhm/2, fwhm/2], [0, (1/2)*maximum], 'g-.', label='HWHM')
-                            plt.legend()
-                            plt.xlabel('x position, HWHM = {}'.format(fwhm/2))
-                            plt.ylabel('normalized counts')
-                            plt.grid()
-                            plt.savefig(r'/Users/owenalfaro/Desktop/testplots/GaussianPlot{}-{}.png'.format(name,a))
-                            a += 1
-                            plt.close()
-                            fwhm_list.append(fwhm)
-                            good_stars_x.append(x_cent)
-                            good_stars_y.append(y_cent)
-                            break
-'''
             else:
                 #print('Radial profile has length of 0...')
                 continue
@@ -163,3 +114,62 @@ class Star_Tools():
 
     def gaussianfit(self, x, a, x0, sigma):
         return a*np.exp(-(x-x0)**2/(2*sigma**2))
+
+
+    def exact_fwhm(self, star_list, data, splitdata=False, radius=30):
+        a = 0
+        fwhm_list = []
+        good_stars_x = []
+        good_stars_y = []
+        # a = 0
+        for star in star_list:
+            x_cent = star[0]
+            y_cent = star[1]
+            star = data[int(y_cent - radius):int(y_cent + radius), int(x_cent - radius):int(x_cent + radius)]
+            starx, stary = np.indices(star.shape)
+            r = np.sqrt((stary - radius) ** 2 + (starx - radius) ** 2)
+            r = r.astype(np.int)
+
+            tbin = np.bincount(r.ravel(), star.ravel())
+            nr = np.bincount(r.ravel())
+            radialprofile = tbin / nr
+
+            f = np.linspace(0, len(radialprofile) - 1, len(radialprofile))
+            popt, pcov = curve_fit(self.gaussianfit, f, radialprofile, p0=[1 / (np.sqrt(2 * np.pi)), mean, sigma])
+            g = np.linspace(0, len(radialprofile) - 1, 10 * len(radialprofile))
+            function = self.gaussianfit(g, *popt)
+            for x in range(len(function)):
+                maximum = (max(radialprofile) / np.median(radialprofile)) - 1
+                if maximum == 0:
+                    continue
+                if function[x] <= (1 / 2) * maximum:
+                    fwhm = 2 * x
+                    if fwhm >= 3 and fwhm <= 30:
+                        fwhm_list.append(fwhm)
+                        good_stars_x.append(x_cent)
+                        good_stars_y.append(y_cent)
+
+                        '''
+        
+                        plt.plot(f, radialprofile, 'b+:', label='data')
+                        plt.plot(f, self.gaussianfit(f, *popt), 'ro:', label='fit')
+                        plt.plot([0, fwhm / 2], [(1 / 2) * maximum, (1 / 2) * maximum], 'g-.')
+                        plt.plot([fwhm / 2, fwhm / 2], [0, (1 / 2) * maximum], 'g-.', label='HWHM')
+                        plt.legend()
+                        plt.xlabel('x position, HWHM = {}'.format(fwhm / 2))
+                        plt.ylabel('normalized counts')
+                        plt.grid()
+                        plt.savefig(r'/Users/owenalfaro/Desktop/testplots/GaussianPlot{}-{}.png'.format(name, a))
+                        plt.close()
+                        a += 1
+                        '''
+        if splitdata:
+            return fwhm_list, good_stars_x, good_stars_y
+        star_table = Table([good_stars_x, good_stars_y], names=('starx', 'stary'))
+        if len(fwhm_list) == 0:
+            med_fwhm = 0
+        else:
+            med_fwhm = np.median(fwhm_list)
+
+        self.log.info(f'FWHMLIST: {fwhm_list}')
+        return star_table, med_fwhm
