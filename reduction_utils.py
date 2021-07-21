@@ -264,7 +264,6 @@ class Simple_Reduce():
         self.log.info('Loaded in science file {}'.format(filename))
         self.log.info(
             'Exposure time: {}, Filter: {}'.format(science[0].header['EXPTIME'], science[0].header['FILTER']))
-        self.log.info(science[0].data)
 
         reduced = (science[0].data - dark_list[science[0].header['EXPTIME']]) / (
                     flat_list[science[0].header['FILTER']])
