@@ -101,7 +101,10 @@ class Simple_Reduce():
             if str(filename)[0:len('mflat')] == 'mflat':
                 continue
             flat_dark = False
-            flat_data = fits.open(file, unit=True)
+            flat_data = fits.open(file, scale_back=True)
+            flat_data[0].data = fits.getdata(file)
+            flat_data[0].scale('float32')
+
             self.log.info('Loaded in flat frame {}'.format(filename))
             if flat_data[0].header['FILTER'] not in flat_list.keys(): #If the exposure time is not in the dict, creates new key
                 keyname = flat_data[0].header['FILTER']
@@ -133,11 +136,13 @@ class Simple_Reduce():
             flat_data.close()
 
         for filter in flat_list.keys():
-            mflat_ = np.median(flat_list[filter], axis = 0)
-            self.log.info(f'Master Flat {filter} calculated')
+            mflat_data = np.median(flat_list[filter], axis = 0)
+            mflat_ = mflat_data/np.median(mflat_data)
 
-            mflat = fits.PrimaryHDU(data=mflat_, header = flat_header[filter], scale_back=True)
-            mflat.scale('uint16')
+            self.log.info(f'Master Flat {filter} calculated')
+            flat_header[filter]['BITPIX'] = -32
+
+            mflat = fits.PrimaryHDU(data=mflat_, header=flat_header[filter], scale_back=True, uint=False)
             mflats[filter] = mflat.data # Adds to list of Mflats
             if not os.path.exists(os.path.join(fsave, ('mflat_{}.fits'.format(filter)))):
                 mflat.writeto(os.path.join(fsave, ('mflat_{}.fits'.format(filter))))
@@ -171,8 +176,10 @@ class Simple_Reduce():
             if str(filename)[0:len('mdark')] == 'mdark':
                 continue
 
-            data = fits.open(file, unit=True)
-            fitsdata = fits.getdata(file)
+            data = fits.open(file, scale_back=True, uint=True)
+            data[0].data = fits.getdata(file)
+            data[0].scale('float32')
+
             self.log.info('Loaded in dark frame {}'.format(filename))
 
             if data[0].header['EXPTIME'] not in exp_times.keys(): #If the exposure time is not in the dict, creates new key
@@ -187,7 +194,7 @@ class Simple_Reduce():
             for key in exp_times.keys():
                 if data[0].header['EXPTIME'] == key:#groups darks in lists by exposure time
                     temp_list = exp_times[key]
-                    temp_list.append(fitsdata)
+                    temp_list.append(data[0].data)
                     exp_times[key] = temp_list
                     if len(header_times[key]) == 0:
                         header_times[key] = data[0].header
@@ -199,8 +206,7 @@ class Simple_Reduce():
             med_dark = np.median(dark_list, axis = 0)
 
             self.log.info('Master dark {}s calculated'.format(xx))
-            dark = fits.PrimaryHDU(data=med_dark, header=header_times[xx], scale_back=True)#.scale('int16', bzero=32768)
-            dark.scale('int16')
+            dark = fits.PrimaryHDU(data=med_dark, header=header_times[xx], scale_back=True, uint=False)
             if len(mdarks[xx]) == 0:
                 mdarks[xx] = dark.data #Creates list of mdarks with keys of exposure time
 
@@ -252,16 +258,19 @@ class Simple_Reduce():
         bad_newfile_save = os.path.join(bad_folder, ('reduced_' + filename))
 
         science = fits.open(path, unit=True)
+        science[0].data = fits.getdata(path)
+        science[0].scale('float32')
+
         self.log.info('Loaded in science file {}'.format(filename))
         self.log.info(
             'Exposure time: {}, Filter: {}'.format(science[0].header['EXPTIME'], science[0].header['FILTER']))
+        self.log.info(science[0].data)
 
         reduced = (science[0].data - dark_list[science[0].header['EXPTIME']]) / (
-                    flat_list[science[0].header['FILTER']] / np.median(
-                flat_list[science[0].header['FILTER']]))
+                    flat_list[science[0].header['FILTER']])
 
         header_in = science[0].header
-
+        np.where(science[0].data >= 0, science[0].data, 0)
         if platesolve:
 #       Plate solving here
             header_out, success = self.plate_solve(coords=coords, header_in=header_in,
@@ -272,16 +281,14 @@ class Simple_Reduce():
                 header_out['HISTORY'] = 'Flat corrected with mflat_{}.fits'.format(science[0].header['FILTER'])
                 header_out['HISTORY'] = 'Reduced using https://github.com/oalfaro2/alnitak'
 
-                compressed = fits.PrimaryHDU(data=reduced, header=header_out, uint=True)
-                compressed.scale('uint16')
+                compressed = fits.PrimaryHDU(data=reduced, header=header_out, scale_back=True, uint=False)
                 compressed.writeto(newfile_save, overwrite=True)  # Overwrites saved image with plate solved version
             else:
 #           If not successful, saves to different directory. Performs what header calculations it can
                 header_out = self.head.header_calculations(plate_solved=False, header=header_in, file=self.path)
                 header_out['HISTORY'] = 'Could not be plate solved'
 
-                compressed = fits.PrimaryHDU(data=reduced, header=header_out, uint=True)
-                compressed.scale('uint16')
+                compressed = fits.PrimaryHDU(data=reduced, header=header_out, scale_back=True, uint=False)
                 compressed.writeto(bad_newfile_save, overwrite=True)
         else:
             header = self.head.header_calculations(file=str(path), coords=coords)
@@ -290,8 +297,7 @@ class Simple_Reduce():
             header['HISTORY'] = 'Flat corrected with mflat_{}.fits'.format(science[0].header['FILTER'])
             header['HISTORY'] = 'Reduced using https://github.com/oalfaro2/alnitak'
 
-            compressed = fits.PrimaryHDU(data=reduced, header=header, uint=True)
-            compressed.scale('uint16')
+            compressed = fits.PrimaryHDU(data=reduced, header=header, scale_back=True, uint=False)
             compressed.writeto(newfile_save,
                                overwrite=True)  # Saves reduced image. Can be left alone or plate solved
 
