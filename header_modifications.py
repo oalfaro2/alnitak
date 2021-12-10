@@ -90,7 +90,10 @@ class Header_Info():
 
         jd = header['JD']    #Julian date at start of exposure
         date = header['DATE-OBS']
-        date_obj = datetime.datetime.strptime(date, '%Y-%m-%dT%H:%M:%S')
+        try:
+            date_obj = datetime.datetime.strptime(date, '%Y-%m-%dT%H:%M:%S.%f')
+        except:
+            date_obj = datetime.datetime.strptime(date, '%Y-%m-%dT%H:%M:%S')
         #print(date, date_obj)
         jd_helio = header['JD-HELIO']    #Heliocentric JD at start of exposure
         mid_exp = header['EXPOSURE']/2   #middle of exposure
