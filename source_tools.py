@@ -76,7 +76,7 @@ class Star_Tools():
             star = data[int(y_cent-radius):int(y_cent+radius), int(x_cent-radius):int(x_cent+radius)]
             starx, stary = np.indices(star.shape)
             r = np.sqrt((stary - radius)**2 + (starx - radius)**2)
-            r = r.astype(np.int)
+            r = r.astype(int)
 
             tbin = np.bincount(r.ravel(), star.ravel())
             nr = np.bincount(r.ravel())
@@ -128,7 +128,7 @@ class Star_Tools():
             star = data[int(y_cent - radius):int(y_cent + radius), int(x_cent - radius):int(x_cent + radius)]
             starx, stary = np.indices(star.shape)
             r = np.sqrt((stary - radius) ** 2 + (starx - radius) ** 2)
-            r = r.astype(np.int)
+            r = r.astype(int)
 
             tbin = np.bincount(r.ravel(), star.ravel())
             nr = np.bincount(r.ravel())
